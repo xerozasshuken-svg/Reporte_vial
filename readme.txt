@@ -73,3 +73,12 @@ npm install jsonwebtoken bcrypt.
 Dentro de pgAdmin cree una DB con el nombre de: 
 reportes_viales_db
 
+
+De momento el seguimiento seria:
+server.js utiliza las credenciasles dadas en db.js , utiliza
+authRoutes.js para saber si va a registrar o hacer login, 
+este utiliza authControllers.js para la logica detras, como 
+la comprobacion de un usuario existente, guardando los datos 
+en la base de datos si no existe , luego un login comprobado 
+por el correo y contraseña y por ultimo con los datos lo 
+muestra al usuario. 

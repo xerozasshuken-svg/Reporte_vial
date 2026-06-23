@@ -1,6 +1,9 @@
 const express = require('express');
 const pool = require('./db');
+// Direcciones de controladores de rutas
 const authRoutes = require('./routes/authRoutes');
+const reporteRoutes = require('./routes/reporteRoutes');
+
 const bcrypt = require('bcrypt'); // <-- Importamos bcrypt para la prueba rápida
 
 const app = express();
@@ -21,6 +24,7 @@ app.get('/api/prueba-bd', async (req, res) => {
 
 // Enlazar las rutas de autenticación
 app.use('/api/auth', authRoutes);
+app.use('/api/reportes', reporteRoutes);
 
 // ==========================================
 //  FUNCION DE PRUEBA RÁPIDA (AUTOMÁTICA V2)
@@ -69,6 +73,21 @@ const ejecutarPruebaCompleta = async () => {
       console.log("   [LOGIN ÉXITO] ¡Contraseña validada correctamente con Bcrypt!");
       console.log("   [JWT GENERADO] Aquí tienes tu Token de acceso de prueba:\n\n", tokenPrueba, "\n");
       console.log("   [INFO] Este string largo es el que el Frontend guardará para hacer reportes.");
+      
+      console.log("... Iniciando simulacion de creacion de reporte vial... ");
+    //Insertar un reporte de prueba asociado al ID del usuario de prubea
+      const reportePrueba = await pool.query(
+        'INSERT INTO reportes (usuario_id, tipo, ubicacion, descripcion, imagen_url) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        [usuarioBD.id,
+          'Accidente',
+          'Estacionamiento de la UT',
+          'Chocaron w coches de estudiantes debido a la lluvia',
+          'http://imagen-ejemplo.com/accidente1.jpg'
+        ]
+      );
+      
+      console.log("[REPORTE EXITO] Reporte guardado fisicamente en la tabla 'Reportes':");
+      console.log(reportePrueba.rows[0]);
     } else {
       console.log("   [LOGIN ERROR] No se pudo validar la contraseña.");
     }
