@@ -82,3 +82,8 @@ la comprobacion de un usuario existente, guardando los datos
 en la base de datos si no existe , luego un login comprobado 
 por el correo y contraseña y por ultimo con los datos lo 
 muestra al usuario. 
+
+Tanto la tabla de reportes, comentarios y usuarios tiene la 
+mimsa logica, controlers, autenticacion y server.js.
+Tambien tienen un autenticador Middleware para reportes
+unicamente posteables por cuentas y verificacion de tokens.

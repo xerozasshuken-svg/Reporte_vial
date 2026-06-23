@@ -3,6 +3,7 @@ const pool = require('./db');
 // Direcciones de controladores de rutas
 const authRoutes = require('./routes/authRoutes');
 const reporteRoutes = require('./routes/reporteRoutes');
+const comentarioRoutes = require('./routes/comentarioRoutes');
 
 const bcrypt = require('bcrypt'); // <-- Importamos bcrypt para la prueba rápida
 
@@ -25,19 +26,20 @@ app.get('/api/prueba-bd', async (req, res) => {
 // Enlazar las rutas de autenticación
 app.use('/api/auth', authRoutes);
 app.use('/api/reportes', reporteRoutes);
+app.use('/api/comentarios',comentarioRoutes);
 
 // ==========================================
-//  FUNCION DE PRUEBA RÁPIDA (AUTOMÁTICA V3) - validacion middleware
+//  FUNCION DE PRUEBA RÁPIDA (AUTOMÁTICA V4)  - Flujo completo -validacion middleware 
 // ==========================================
 const ejecutarPruebaCompleta = async () => {
   try {
-    console.log("\n Ejecutando pruebas automáticas de Autenticación , Middleware ...");
+    console.log("\n Ejecutando pruebas automaticas: Flujo completo");
     
     const nombrePrueba = "Usuario Test";
     const correoPrueba = "test@vialnl.com";
     const passwordPrueba = "password123";
 
-    // 1. Simulación de registro / verificacion de usuario
+    // 1. Registro / verificacion de usuario
     const existe = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correoPrueba]);
     let usuarioBD;
 
@@ -53,7 +55,7 @@ const ejecutarPruebaCompleta = async () => {
     } 
     else {
       usuarioBD = existe.rows[0];
-      console.log("   [REGISTRO] El usuario de prueba ya existía.");
+      console.log("   [REGISTRO] El usuario de prueba ya existía en la BD.");
     }
 
     // 2. Simulación de LOGIN para obtener el Token JWT real
@@ -67,62 +69,79 @@ const ejecutarPruebaCompleta = async () => {
         return;
     }
     //Creacion de token identico a como lo ahce el controlador de login
-      const jwt = require('jsonwebtoken');
-      const tokenReal = jwt.sign(
-        { id: usuarioBD.id, nombre: usuarioBD.nombre }, 
+    const jwt = require('jsonwebtoken');
+    const tokenReal = jwt.sign(
+      { id: usuarioBD.id, nombre: usuarioBD.nombre }, 
         'mi_clave_secreta_super_segura_123', 
         { expiresIn: '2h' }
-      );
-
+    );
     console.log("   [LOGIN ÉXITO] Token JWT generado correctamente.");
 
     // Prueba del Middleware
     console.log("...Enviando reporte simulando el Middleware...");
 
-  //Simulacion A: que pasa si enviamos los datos con el token correcto
+    //Simulacion A: que pasa si enviamos los datos con el token correcto
     
-    //Simulamos lo que hace el middleware internamente
+    let reporteID;
+      try{
+        const datosDescifrados = jwt.verify(tokenReal, 'mi_clave_secreta_super_segura_123');
+        const nuevoReporteSeguro = await pool.query(
+          'INSERT INTO reportes (usuario_id, tipo, ubicacion, descripcion, imagen_url) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+          [
+            datosDescifrados.id,
+            'Trafico pesado',
+            'Avenida constitucion',
+            'Trafico detenido por obras en la via principal',
+            'http://imagen-ejemplo.com/accidente1.jpg'
+          ]
+        );
+        reporteID = nuevoReporteSeguro.rows[0].id;// Guardamos el ID para usarlo en el comentario
+        console.log(`   [REPORTE] Creado con exito. ID asignado: ${reporteID}`);
+      }
+      catch (err) {
+        console.log(" [REPORTE ERROR] Fallo la creacion", err.message);
+      }
+
+      // NUEVA PRUEBA: instertar un comentario al reporte creado
+    
+      console.log("... Simulando envio de un comentario protegido por Middleware...");
+
+      try{
+        const datosDescifrados = jwt.verify(tokenReal, 'mi_clave_secreta_super_segura_123');
+        
+        const nuevoComentario = await pool.query(
+          'INSERT INTO comentarios (reporte_id, usuario_id, texto) VALUES ($1, $2, $3) RETURNING *',
+          [
+            reporteID,            //Atado al reporte creado
+            datosDescifrados.id,  //Extraido del token
+            'Confirmo el reporte, llevo 20 minuts varado aqui. Tomen rutas alternas'
+          ]
+        );
+        console.log(" [COMENTARIO EXITO] Comentario guardado fisicamente:");
+        console.log(`     ID: ${nuevoComentario.rows[0].id} | Contenido: "${nuevoComentario.rows[0].texto}"`);
+      }
+      catch (err) {
+        console.log("[COMENTARIO ERROR] El Middleware o la BD rebotaron el comentario Motivo: ",err.message);
+      }
+
+    // NUEVA PRUEBA: Leer comentarios de un reporte (simulacion de feed publico)
+    console.log(`...Consultando la BD para traer comentarios del Reporte ID: ${reporteID}...`);
     try{
-      //Middleware descifra el token
-      const datosDescifrados = jwt.verify(tokenReal, 'mi_clave_secreta_super_segura_123');
-      
-      // Si pasa, el controlador ejecuta el INSERT de forma segura (sin pedir usario_id al cliente)
-      const nuevoReporteSeguro = await pool.query(
-        'INSERT INTO reportes (usuario_id, tipo, ubicacion, descripcion, imagen_url) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [
-          datosDescifrados.id,
-          'Trafico pesado',
-          'Estacionamiento de la UT',
-          'Chocaron w coches de estudiantes debido a la lluvia',
-          'http://imagen-ejemplo.com/accidente1.jpg'
-        ]
+      const consultaComentarios = await pool.query(
+        `SELECT c.*, u.nombre AS autor FROM comentarios c INNER JOIN usuarios u ON c.usuario_id = u.id WHERE c.reporte_id = $1`,
+        [reporteID]
       );
-      console.log("[TEST A EXITO] El Middleware valido el token. Reporte creado");
-      console.log("     Reporte ID: ", nuevoReporteSeguro.rows[0].id, "| Creado por usuario ID: ", nuevoReporteSeguro.rows[0].usuario_id);
+      console.log(`   [FEED COMENTARIOS] Se encontraron ${consultaComentarios.rows.length} comentarios para este reporte:`);
+      console.log(consultaComentarios.rows);
     }
-    catch (err) {
-      console.log(" [TEST A ERROR] El Middleware reboto un token que debia ser valido:", err.message);
-    }
-
-  // Simulacion B: que pasa si alguien intenta hackear o enviar un Token falso/vacio
-    
-    console.log("... Probando intento de hackeo (Token Falso)...");
-
-    const tokenFalso = "un_token_inventado_malicioso_xyz";
-    try{
-      //El Midleware intenta verificar el token falso
-      jwt.verify(tokenFalso, 'mi_clave_secreta_super_segura_123');
-      console.log(" [TEST B FALLA] ALERTA, el sistema dejo pasar un token falso");
-    }
-    catch (err) {
-      console.log("[PRUEBA B EXITO] El Middleware bloqueo el acceso correctamente. Motivo: ",err.message);
+    catch (err){
+      console.log("   [FEED COMENTARIOS ERROR] No se pudieron leer: ",error.message);
     }
 
-    console.log("FIN DE LAS PRUEBAS DE SEGURIDAD");
-
+    console.log(" FIN DE LAS PRUEBAS DE SEGURIDAD Y FLUJO COMPLETO\n");
   }
-  catch (error){
-    console.error("   [ERROR GENERAL EN LA PRUEBA]: ",error.message);
+  catch (error) {
+    console.error(" [ERROR GENERAL EN LA PRUEBA]: ", error.message);
   }
 };
 // ==========================================
