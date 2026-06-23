@@ -3,7 +3,9 @@ const { report } = require('../routes/authRoutes');
 
 //  Crear un nuevo reporte vial
 const crearReporte = async (req, res) => {
-    const { usuario_id, tipo, ubicacion, descripcion, imagen_url} = req.body;
+     // "usuario_id" viene desde el token gracias al middleware
+    const usuario_id = req.usuario.id
+    const {tipo, ubicacion, descripcion, imagen_url} = req.body;
 
     try{
         const nuevoReporte = await pool.query(
@@ -42,4 +44,4 @@ const obtenerTodosLosReportes = async (req, res) =>{
 module.exports = {
     crearReporte,
     obtenerTodosLosReportes
-}
+};

@@ -27,17 +27,17 @@ app.use('/api/auth', authRoutes);
 app.use('/api/reportes', reporteRoutes);
 
 // ==========================================
-//  FUNCION DE PRUEBA RÁPIDA (AUTOMÁTICA V2)
+//  FUNCION DE PRUEBA RÁPIDA (AUTOMÁTICA V3) - validacion middleware
 // ==========================================
 const ejecutarPruebaCompleta = async () => {
   try {
-    console.log("... Ejecutando pruebas automáticas de Autenticación ...");
+    console.log("\n Ejecutando pruebas automáticas de Autenticación , Middleware ...");
     
     const nombrePrueba = "Usuario Test";
     const correoPrueba = "test@vialnl.com";
     const passwordPrueba = "password123";
 
-    // 1. Simulación o verificación de Registro
+    // 1. Simulación de registro / verificacion de usuario
     const existe = await pool.query('SELECT * FROM usuarios WHERE correo = $1', [correoPrueba]);
     let usuarioBD;
 
@@ -50,50 +50,79 @@ const ejecutarPruebaCompleta = async () => {
       );
       usuarioBD = resultado.rows[0];
       console.log("   [REGISTRO] Nuevo usuario de prueba creado.");
-    } else {
+    } 
+    else {
       usuarioBD = existe.rows[0];
       console.log("   [REGISTRO] El usuario de prueba ya existía.");
     }
 
-    // 2. Simulación de LOGIN e inicio de sesión con JWT
-    console.log("... Iniciando simulación de Login con JWT ...");
+    // 2. Simulación de LOGIN para obtener el Token JWT real
+    console.log("... Iniciando simulación para obtener Token JWT ...");
     
     // Buscamos las credenciales del usuario de prueba
     const passwordCorrecta = await bcrypt.compare(passwordPrueba, usuarioBD.password);
     
-    if (passwordCorrecta) {
-      // Generamos el token tal como lo hace el controlador
+    if (!passwordCorrecta) {
+      console.log(" [LOGIN ERROR] Contrasela incorrecta");
+        return;
+    }
+    //Creacion de token identico a como lo ahce el controlador de login
       const jwt = require('jsonwebtoken');
-      const tokenPrueba = jwt.sign(
+      const tokenReal = jwt.sign(
         { id: usuarioBD.id, nombre: usuarioBD.nombre }, 
         'mi_clave_secreta_super_segura_123', 
         { expiresIn: '2h' }
       );
 
-      console.log("   [LOGIN ÉXITO] ¡Contraseña validada correctamente con Bcrypt!");
-      console.log("   [JWT GENERADO] Aquí tienes tu Token de acceso de prueba:\n\n", tokenPrueba, "\n");
-      console.log("   [INFO] Este string largo es el que el Frontend guardará para hacer reportes.");
+    console.log("   [LOGIN ÉXITO] Token JWT generado correctamente.");
+
+    // Prueba del Middleware
+    console.log("...Enviando reporte simulando el Middleware...");
+
+  //Simulacion A: que pasa si enviamos los datos con el token correcto
+    
+    //Simulamos lo que hace el middleware internamente
+    try{
+      //Middleware descifra el token
+      const datosDescifrados = jwt.verify(tokenReal, 'mi_clave_secreta_super_segura_123');
       
-      console.log("... Iniciando simulacion de creacion de reporte vial... ");
-    //Insertar un reporte de prueba asociado al ID del usuario de prubea
-      const reportePrueba = await pool.query(
+      // Si pasa, el controlador ejecuta el INSERT de forma segura (sin pedir usario_id al cliente)
+      const nuevoReporteSeguro = await pool.query(
         'INSERT INTO reportes (usuario_id, tipo, ubicacion, descripcion, imagen_url) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [usuarioBD.id,
-          'Accidente',
+        [
+          datosDescifrados.id,
+          'Trafico pesado',
           'Estacionamiento de la UT',
           'Chocaron w coches de estudiantes debido a la lluvia',
           'http://imagen-ejemplo.com/accidente1.jpg'
         ]
       );
-      
-      console.log("[REPORTE EXITO] Reporte guardado fisicamente en la tabla 'Reportes':");
-      console.log(reportePrueba.rows[0]);
-    } else {
-      console.log("   [LOGIN ERROR] No se pudo validar la contraseña.");
+      console.log("[TEST A EXITO] El Middleware valido el token. Reporte creado");
+      console.log("     Reporte ID: ", nuevoReporteSeguro.rows[0].id, "| Creado por usuario ID: ", nuevoReporteSeguro.rows[0].usuario_id);
+    }
+    catch (err) {
+      console.log(" [TEST A ERROR] El Middleware reboto un token que debia ser valido:", err.message);
     }
 
-  } catch (error) {
-    console.error("   [ERROR EN LA PRUEBA]:", error.message);
+  // Simulacion B: que pasa si alguien intenta hackear o enviar un Token falso/vacio
+    
+    console.log("... Probando intento de hackeo (Token Falso)...");
+
+    const tokenFalso = "un_token_inventado_malicioso_xyz";
+    try{
+      //El Midleware intenta verificar el token falso
+      jwt.verify(tokenFalso, 'mi_clave_secreta_super_segura_123');
+      console.log(" [TEST B FALLA] ALERTA, el sistema dejo pasar un token falso");
+    }
+    catch (err) {
+      console.log("[PRUEBA B EXITO] El Middleware bloqueo el acceso correctamente. Motivo: ",err.message);
+    }
+
+    console.log("FIN DE LAS PRUEBAS DE SEGURIDAD");
+
+  }
+  catch (error){
+    console.error("   [ERROR GENERAL EN LA PRUEBA]: ",error.message);
   }
 };
 // ==========================================
